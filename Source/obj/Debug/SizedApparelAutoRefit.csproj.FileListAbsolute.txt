@@ -1,0 +1,5 @@
+E:\SteamLibrary\steamapps\common\RimWorld\Mods\SizedApparelAutoRefit\Source\obj\Debug\SizedApparelAutoRefit.csproj.AssemblyReference.cache
+E:\SteamLibrary\steamapps\common\RimWorld\Mods\SizedApparelAutoRefit\Source\obj\Debug\SizedApparelAutoRefit.GeneratedMSBuildEditorConfig.editorconfig
+E:\SteamLibrary\steamapps\common\RimWorld\Mods\SizedApparelAutoRefit\Source\obj\Debug\SizedApparelAutoRefit.csproj.CoreCompileInputs.cache
+E:\SteamLibrary\steamapps\common\RimWorld\Mods\SizedApparelAutoRefit\Assemblies\SizedApparelAutoRefit.dll
+E:\SteamLibrary\steamapps\common\RimWorld\Mods\SizedApparelAutoRefit\Source\obj\Debug\SizedApparelAutoRefit.dll
