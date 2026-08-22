@@ -13,7 +13,8 @@ namespace SizedApparelAutoRefit
     // </li>
     public class SARFitExtension : DefModExtension
     {
-        public float strength = SARPolicy.DefaultStrength;
+        public float strength = SARPolicy.DefaultStrength;      // front and back
+        public float strengthSide = SARPolicy.DefaultStrength;  // east and west
         public bool keepBreasts = true;
     }
 
@@ -39,8 +40,18 @@ namespace SizedApparelAutoRefit
         public const string TagForceRefit = "SAR_ForceRefit";
         private const string ThigappeIgnore = "THIGAPPE_IgnoreTag";
 
+        // Front and side are separate because the bust protrudes much further in profile than
+        // head-on, so a value that looks right from the front is usually far too weak from the
+        // side, and vice versa.
+        public enum Facing { Front, Side }
+
         // Defaults from tags and mod extensions, before any user choice.
         public static void Defaults(ThingDef def, out float strength, out bool keepBreasts)
+        {
+            Defaults(def, Facing.Front, out strength, out keepBreasts);
+        }
+
+        public static void Defaults(ThingDef def, Facing facing, out float strength, out bool keepBreasts)
         {
             strength = DefaultStrength;
             keepBreasts = true;
@@ -49,7 +60,7 @@ namespace SizedApparelAutoRefit
             SARFitExtension ext = def.GetModExtension<SARFitExtension>();
             if (ext != null)
             {
-                strength = Mathf.Clamp01(ext.strength);
+                strength = Mathf.Clamp01(facing == Facing.Side ? ext.strengthSide : ext.strength);
                 keepBreasts = ext.keepBreasts;
                 return;
             }
@@ -62,12 +73,20 @@ namespace SizedApparelAutoRefit
         }
 
         // How strongly this garment follows the bust, 0 to 1.
-        public static float Strength(ThingDef def, SARSettings s)
+        public static float Strength(ThingDef def, SARSettings s, Facing facing)
         {
             if (def == null || s == null) return 0f;
-            if (s.strengths.TryGetValue(def.defName, out float user)) return Mathf.Clamp01(user);
-            Defaults(def, out float d, out _);
+
+            Dictionary<string, float> store = Store(s, facing);
+            if (store.TryGetValue(def.defName, out float user)) return Mathf.Clamp01(user);
+
+            Defaults(def, facing, out float d, out _);
             return d;
+        }
+
+        private static Dictionary<string, float> Store(SARSettings s, Facing facing)
+        {
+            return facing == Facing.Side ? s.strengthsSide : s.strengths;
         }
 
         public static bool KeepBreasts(ThingDef def, SARSettings s)
@@ -79,12 +98,21 @@ namespace SizedApparelAutoRefit
             return keep;
         }
 
-        public static void SetStrength(ThingDef def, SARSettings s, float value)
+        public static void SetStrength(ThingDef def, SARSettings s, Facing facing, float value)
         {
-            Defaults(def, out float d, out _);
+            Defaults(def, facing, out float d, out _);
             value = Mathf.Clamp01(value);
-            if (Mathf.Abs(value - d) < 0.001f) s.strengths.Remove(def.defName);
-            else s.strengths[def.defName] = value;
+
+            Dictionary<string, float> store = Store(s, facing);
+            if (Mathf.Abs(value - d) < 0.001f) store.Remove(def.defName);
+            else store[def.defName] = value;
+        }
+
+        // Both facings at once, for the Off checkbox and the bulk buttons.
+        public static void SetStrengthAll(ThingDef def, SARSettings s, float value)
+        {
+            SetStrength(def, s, Facing.Front, value);
+            SetStrength(def, s, Facing.Side, value);
         }
 
         public static void SetKeepBreasts(ThingDef def, SARSettings s, bool value)

@@ -21,7 +21,8 @@ namespace SizedApparelAutoRefit
 
         // Explicit per-garment choices, stored as deviations from the tag/extension defaults so
         // the config stays small and newly installed apparel picks up sane defaults on its own.
-        public Dictionary<string, float> strengths = new Dictionary<string, float>();
+        public Dictionary<string, float> strengths = new Dictionary<string, float>();      // front and back
+        public Dictionary<string, float> strengthsSide = new Dictionary<string, float>();  // east and west
         public HashSet<string> breastsOn = new HashSet<string>();
         public HashSet<string> breastsOff = new HashSet<string>();
 
@@ -52,6 +53,14 @@ namespace SizedApparelAutoRefit
             Scribe_Values.Look(ref maxCachedTextures, "maxCachedTextures", 1024);
             Scribe_Collections.Look(ref strengths, "strengths", LookMode.Value, LookMode.Value);
             if (strengths == null) strengths = new Dictionary<string, float>();
+            Scribe_Collections.Look(ref strengthsSide, "strengthsSide", LookMode.Value, LookMode.Value);
+
+            // Settings written before front and side were separated carry one value meaning both.
+            // Copy it across rather than silently resetting side to the default.
+            if (strengthsSide == null)
+            {
+                strengthsSide = new Dictionary<string, float>(strengths);
+            }
             ScribeSet(ref breastsOn, "breastsOn");
             ScribeSet(ref breastsOff, "breastsOff");
             Scribe_Values.Look(ref logGeneration, "logGeneration", false);

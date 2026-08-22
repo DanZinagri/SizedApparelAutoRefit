@@ -186,7 +186,7 @@ namespace SizedApparelAutoRefit
 
             ThingDef def = SARRegistry.DefFor(key.wornPath);
             string how = "no def";
-            float fit = def == null ? 0f : ResolveFit(def, out how);
+            float fit = def == null ? 0f : ResolveFit(def, rot, out how);
 
             LogVerdict(key, rot, how, fit);
 
@@ -259,11 +259,14 @@ namespace SizedApparelAutoRefit
 
         // Whether this garment is reshaped, and how strongly. The decision is the user's, taken
         // from the per-item list; the global slider only scales the result.
-        private static float ResolveFit(ThingDef def, out string how)
+        // East (and the west it mirrors) is the side profile; south and north are front and back.
+        private static float ResolveFit(ThingDef def, string rot, out string how)
         {
             SARSettings s = SARMod.Settings;
-            float strength = SARPolicy.Strength(def, s);
-            how = $"strength {strength:0.00}";
+            SARPolicy.Facing facing = rot == "east" ? SARPolicy.Facing.Side : SARPolicy.Facing.Front;
+
+            float strength = SARPolicy.Strength(def, s, facing);
+            how = $"{(facing == SARPolicy.Facing.Side ? "side" : "front")} strength {strength:0.00}";
             return strength;
         }
 

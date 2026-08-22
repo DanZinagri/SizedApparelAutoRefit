@@ -24,10 +24,13 @@ namespace SizedApparelAutoRefit
 
         private const float RowHeight = 30f;
         private const float ToggleWidth = 110f;
-        private const float SliderWidth = 170f;
+        private const float SliderWidth = 150f;
         private const float OffWidth = 46f;
 
-        public override Vector2 InitialSize => pawn != null ? new Vector2(980f, 720f) : new Vector2(820f, 720f);
+        // Right-hand controls: front slider, side slider, off, draw breasts.
+        private const float ControlsWidth = SliderWidth * 2f + OffWidth + ToggleWidth;
+
+        public override Vector2 InitialSize => pawn != null ? new Vector2(980f, 720f) : new Vector2(980f, 720f);
 
         private const float PreviewWidth = 240f;
         private Rot4 previewRot = Rot4.South;
@@ -84,6 +87,7 @@ namespace SizedApparelAutoRefit
             if (Widgets.ButtonText(new Rect(588f, 76f, 120f, 28f), "Reset to defaults"))
             {
                 s.strengths.Clear();
+                s.strengthsSide.Clear();
                 s.breastsOn.Clear(); s.breastsOff.Clear();
                 dirty = true;
                 registryDirty = true;
@@ -104,7 +108,8 @@ namespace SizedApparelAutoRefit
 
             Rect head = new Rect(0f, 112f, inRect.width - 16f - (pawn != null ? PreviewWidth : 0f), 24f);
             Widgets.Label(new Rect(head.x + 4f, head.y, 300f, 24f), "Garment");
-            Widgets.Label(new Rect(head.xMax - SliderWidth - OffWidth - ToggleWidth, head.y, SliderWidth, 24f), "Refit strength");
+            Widgets.Label(new Rect(head.xMax - ControlsWidth, head.y, SliderWidth, 24f), "Front / back");
+            Widgets.Label(new Rect(head.xMax - SliderWidth - OffWidth - ToggleWidth, head.y, SliderWidth, 24f), "Side");
             Widgets.Label(new Rect(head.xMax - OffWidth - ToggleWidth, head.y, OffWidth, 24f), "Off");
             Widgets.Label(new Rect(head.xMax - ToggleWidth, head.y, ToggleWidth, 24f), "Draw breasts");
             Widgets.DrawLineHorizontal(0f, head.yMax, head.width);
@@ -125,52 +130,63 @@ namespace SizedApparelAutoRefit
             Widgets.EndScrollView();
         }
 
+        private void DrawStrength(Rect rect, ThingDef def, SARSettings s, SARPolicy.Facing facing, float value)
+        {
+            float updated = Widgets.HorizontalSlider(rect, value, 0f, 1f,
+                middleAlignment: false, value <= 0.001f ? "off" : value.ToString("0.00"));
+
+            if (Mathf.Abs(updated - value) > 0.001f)
+            {
+                SARPolicy.SetStrength(def, s, facing, updated);
+                dirty = true;
+                pendingApply = true;
+            }
+        }
+
         private void DrawRow(Rect row, ThingDef def, SARSettings s, int index)
         {
             if (index % 2 == 1) Widgets.DrawLightHighlight(row);
             Widgets.DrawHighlightIfMouseover(row);
 
-            float strength = SARPolicy.Strength(def, s);
+            float front = SARPolicy.Strength(def, s, SARPolicy.Facing.Front);
+            float side = SARPolicy.Strength(def, s, SARPolicy.Facing.Side);
             bool breasts = SARPolicy.KeepBreasts(def, s);
             bool canRefit = SARRegistry.CanRefit(def);
 
             string layer = def.apparel?.LastLayer?.label ?? "";
-            Widgets.Label(new Rect(row.x + 4f, row.y + 4f, row.width - SliderWidth - OffWidth - ToggleWidth - 12f, row.height),
+            Widgets.Label(new Rect(row.x + 4f, row.y + 4f, row.width - ControlsWidth - 12f, row.height),
                 def.LabelCap + "  <color=#888888>(" + layer + ")</color>");
 
-            Rect rStrength = new Rect(row.xMax - SliderWidth - OffWidth - ToggleWidth, row.y + 6f, SliderWidth - 10f, 20f);
+            Rect rFront = new Rect(row.xMax - ControlsWidth, row.y + 6f, SliderWidth - 10f, 20f);
+            Rect rSide = new Rect(row.xMax - SliderWidth - OffWidth - ToggleWidth, row.y + 6f, SliderWidth - 10f, 20f);
+
             if (canRefit)
             {
-                float newStrength = Widgets.HorizontalSlider(rStrength, strength, 0f, 1f,
-                    middleAlignment: false, strength <= 0.001f ? "off" : strength.ToString("0.00"));
-                if (Mathf.Abs(newStrength - strength) > 0.001f)
-                {
-                    SARPolicy.SetStrength(def, s, newStrength);
-                    dirty = true;
-                    pendingApply = true;
-                }
+                DrawStrength(rFront, def, s, SARPolicy.Facing.Front, front);
+                DrawStrength(rSide, def, s, SARPolicy.Facing.Side, side);
             }
             else
             {
                 GUI.color = new Color(0.55f, 0.55f, 0.55f);
-                Widgets.Label(rStrength, "no worn texture");
-                TooltipHandler.TipRegion(rStrength, "This garment draws through its own render nodes rather than a "
+                Rect rNote = new Rect(rFront.x, rFront.y, SliderWidth * 2f - 10f, 20f);
+                Widgets.Label(rNote, "no worn texture");
+                TooltipHandler.TipRegion(rNote, "This garment draws through its own render nodes rather than a "
                     + "worn graphic path, so its texture cannot be reshaped from here. Draw breasts still works.");
                 GUI.color = Color.white;
             }
 
-            // One-click off, so turning a garment (or a filtered batch) off does not mean
-            // dragging a slider to zero each time. Unticking restores the default rather than
-            // whatever the slider happened to be at.
+            // One-click off, so turning a garment (or a filtered batch) off does not mean dragging
+            // sliders to zero each time. Acts on both facings, and unticking restores the defaults
+            // rather than whatever the sliders happened to be at.
             Rect rOff = new Rect(row.xMax - OffWidth - ToggleWidth, row.y + 4f, 24f, 24f);
             if (canRefit)
             {
-                bool isOff = strength <= 0.001f;
+                bool isOff = front <= 0.001f && side <= 0.001f;
                 bool newOff = isOff;
                 Widgets.Checkbox(rOff.position, ref newOff);
                 if (newOff != isOff)
                 {
-                    SARPolicy.SetStrength(def, s, newOff ? 0f : SARPolicy.DefaultStrength);
+                    SARPolicy.SetStrengthAll(def, s, newOff ? 0f : SARPolicy.DefaultStrength);
                     dirty = true;
                     pendingApply = true;
                 }
@@ -287,7 +303,8 @@ namespace SizedApparelAutoRefit
         private void BulkRefit(bool value)
         {
             SARSettings s = SARMod.Settings;
-            for (int i = 0; i < visible.Count; i++) SARPolicy.SetStrength(visible[i], s, value ? SARPolicy.DefaultStrength : 0f);
+            for (int i = 0; i < visible.Count; i++)
+                SARPolicy.SetStrengthAll(visible[i], s, value ? SARPolicy.DefaultStrength : 0f);
             dirty = true;
             pendingApply = true;
         }

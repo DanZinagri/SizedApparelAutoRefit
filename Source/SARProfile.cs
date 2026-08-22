@@ -54,6 +54,12 @@ namespace SizedApparelAutoRefit
                         new XAttribute("value", kv.Value.ToString("0.###"))));
                 root.Add(strengths);
 
+                XElement sideStrengths = new XElement("strengthsSide");
+                foreach (KeyValuePair<string, float> kv in s.strengthsSide)
+                    sideStrengths.Add(new XElement("li", new XAttribute("def", kv.Key),
+                        new XAttribute("value", kv.Value.ToString("0.###"))));
+                root.Add(sideStrengths);
+
                 root.Add(SetElement("breastsOn", s.breastsOn));
                 root.Add(SetElement("breastsOff", s.breastsOff));
 
@@ -78,6 +84,7 @@ namespace SizedApparelAutoRefit
                 XElement root = XElement.Load(path);
 
                 s.strengths.Clear();
+                s.strengthsSide.Clear();
                 s.breastsOn.Clear();
                 s.breastsOff.Clear();
 
@@ -99,6 +106,19 @@ namespace SizedApparelAutoRefit
                             s.strengths[defName] = UnityEngine.Mathf.Clamp01(v);
                             applied++;
                         }
+                    }
+                }
+
+                XElement sideStrengths = root.Element("strengthsSide");
+                if (sideStrengths != null)
+                {
+                    foreach (XElement li in sideStrengths.Elements("li"))
+                    {
+                        string defName = (string)li.Attribute("def");
+                        if (defName.NullOrEmpty()) continue;
+                        if (DefDatabase<ThingDef>.GetNamedSilentFail(defName) == null) continue;
+                        if (float.TryParse((string)li.Attribute("value"), out float v))
+                            s.strengthsSide[defName] = UnityEngine.Mathf.Clamp01(v);
                     }
                 }
 
