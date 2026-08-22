@@ -30,7 +30,7 @@ namespace SizedApparelAutoRefit
             string naked = bodyType.bodyNakedGraphicPath;
             if (naked.NullOrEmpty()) return null;
 
-            string cacheKey = naked + "|" + male;
+            string cacheKey = naked + "|" + male + "|" + SABridge.UseGenderSpecificTexture;
             if (bodyPathCache.TryGetValue(cacheKey, out string cached)) return cached;
 
             string result = null;
@@ -45,8 +45,14 @@ namespace SizedApparelAutoRefit
 
         private static IEnumerable<string> BodyCandidates(string naked, bool male)
         {
-            // Gendered variants first, matching SA's own search order.
-            yield return naked + "_BaseBody" + (male ? "M" : "F");
+            // Only try the gendered variant when Sized Apparel is actually using gendered body
+            // textures. Its GetBodyGraphic only appends F/M under that setting, and the Hulk build
+            // ships both variants differing by up to 82px in width — measuring against the wrong
+            // one puts the whole refit in the wrong place.
+            if (SABridge.UseGenderSpecificTexture)
+            {
+                yield return naked + "_BaseBody" + (male ? "M" : "F");
+            }
             yield return naked + "_BaseBody";
             // With SA's body textures disabled it renders the vanilla body, so the vanilla
             // outline is the honest reference.
@@ -60,7 +66,7 @@ namespace SizedApparelAutoRefit
         {
             if (bodyType == null || size <= 0) return null;
 
-            string cacheKey = bodyType.defName + "|" + male + "|" + size;
+            string cacheKey = bodyType.defName + "|" + male + "|" + size + "|" + SABridge.UseGenderSpecificTexture;
             if (breastPathCache.TryGetValue(cacheKey, out string cached)) return cached;
 
             string result = null;
@@ -81,9 +87,11 @@ namespace SizedApparelAutoRefit
         private static IEnumerable<string> BreastCandidates(string bodyType, bool male, int n)
         {
             string g = male ? "M" : "F";
-            yield return BreastFolder + "Breasts_" + bodyType + g + "_" + n;
+            bool gendered = SABridge.UseGenderSpecificTexture;
+
+            if (gendered) yield return BreastFolder + "Breasts_" + bodyType + g + "_" + n;
             yield return BreastFolder + "Breasts_" + bodyType + "_" + n;
-            yield return BreastFolder + "Breasts" + g + "_" + n;
+            if (gendered) yield return BreastFolder + "Breasts" + g + "_" + n;
             yield return BreastFolder + "Breasts_" + n;
         }
 

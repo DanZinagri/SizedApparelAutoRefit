@@ -37,9 +37,19 @@ namespace SizedApparelAutoRefit
 
         private readonly Pawn pawn;
 
+        // Which build the sliders on screen apply to. Opened from a colonist, it starts on that
+        // colonist's build so edits land where the user is looking.
+        private string bodyType;
+
         public Window_SARApparel(Pawn pawn = null)
         {
             this.pawn = pawn;
+            bodyType = pawn?.story?.bodyType?.defName;
+            if (bodyType.NullOrEmpty())
+            {
+                List<BodyTypeDef> eligible = SARBodyTypes.Eligible();
+                bodyType = eligible.Count > 0 ? eligible[0].defName : "Female";
+            }
             doCloseX = true;
             doCloseButton = true;
             forcePause = false;
@@ -80,11 +90,27 @@ namespace SizedApparelAutoRefit
             string newSearch = Widgets.TextField(searchRect, search);
             if (newSearch != search) search = newSearch;
 
-            if (Widgets.ButtonText(new Rect(332f, 76f, 120f, 28f), "Refit: all on")) BulkRefit(true);
-            if (Widgets.ButtonText(new Rect(460f, 76f, 120f, 28f), "Refit: all off")) BulkRefit(false);
+            // Which build the sliders below apply to. The bust sits in a different place and
+            // protrudes by a different amount on each, so they are tuned separately.
+            Rect rBuild = new Rect(332f, 76f, 150f, 28f);
+            if (Widgets.ButtonText(rBuild, "Build: " + bodyType))
+            {
+                List<FloatMenuOption> opts = new List<FloatMenuOption>();
+                foreach (BodyTypeDef bt in SARBodyTypes.Eligible())
+                {
+                    string name = bt.defName;
+                    opts.Add(new FloatMenuOption(name, delegate { bodyType = name; }));
+                }
+                if (opts.Count > 0) Find.WindowStack.Add(new FloatMenu(opts));
+            }
+            TooltipHandler.TipRegion(rBuild, "Which body build the refit sliders apply to. Changes here do "
+                + "not affect the other builds. Draw breasts applies to the garment on every build.");
+
+            if (Widgets.ButtonText(new Rect(490f, 76f, 120f, 28f), "Refit: all on")) BulkRefit(true);
+            if (Widgets.ButtonText(new Rect(618f, 76f, 120f, 28f), "Refit: all off")) BulkRefit(false);
             DrawProfileButtons(new Rect(inRect.width - 348f, 40f, 348f, 28f));
 
-            if (Widgets.ButtonText(new Rect(588f, 76f, 120f, 28f), "Reset to defaults"))
+            if (Widgets.ButtonText(new Rect(746f, 76f, 150f, 28f), "Reset to defaults"))
             {
                 s.strengths.Clear();
                 s.strengthsSide.Clear();
@@ -132,12 +158,12 @@ namespace SizedApparelAutoRefit
 
         private void DrawStrength(Rect rect, ThingDef def, SARSettings s, SARPolicy.Facing facing, float value)
         {
-            float updated = Widgets.HorizontalSlider(rect, value, 0f, 1f,
+            float updated = Widgets.HorizontalSlider(rect, value, 0f, SARPolicy.MaxStrength,
                 middleAlignment: false, value <= 0.001f ? "off" : value.ToString("0.00"));
 
             if (Mathf.Abs(updated - value) > 0.001f)
             {
-                SARPolicy.SetStrength(def, s, facing, updated);
+                SARPolicy.SetStrength(def, s, facing, bodyType, updated);
                 dirty = true;
                 pendingApply = true;
             }
@@ -148,8 +174,8 @@ namespace SizedApparelAutoRefit
             if (index % 2 == 1) Widgets.DrawLightHighlight(row);
             Widgets.DrawHighlightIfMouseover(row);
 
-            float front = SARPolicy.Strength(def, s, SARPolicy.Facing.Front);
-            float side = SARPolicy.Strength(def, s, SARPolicy.Facing.Side);
+            float front = SARPolicy.Strength(def, s, SARPolicy.Facing.Front, bodyType);
+            float side = SARPolicy.Strength(def, s, SARPolicy.Facing.Side, bodyType);
             bool breasts = SARPolicy.KeepBreasts(def, s);
             bool canRefit = SARRegistry.CanRefit(def);
 
@@ -186,8 +212,8 @@ namespace SizedApparelAutoRefit
                 Widgets.Checkbox(rOff.position, ref newOff);
                 if (newOff != isOff)
                 {
-                    if (newOff) SARPolicy.SetStrengthAll(def, s, 0f);
-                    else SARPolicy.RestoreDefaults(def, s);
+                    if (newOff) SARPolicy.SetStrengthAll(def, s, bodyType, 0f);
+                    else SARPolicy.RestoreDefaults(def, s, bodyType);
                     dirty = true;
                     pendingApply = true;
                 }
@@ -228,6 +254,17 @@ namespace SizedApparelAutoRefit
             catch
             {
                 Widgets.Label(img, "Preview unavailable.");
+            }
+
+            // The preview renders this pawn on their own build. If the dropdown has been moved
+            // to a different one, the edits being made are not the ones on screen.
+            string pawnBuild = pawn?.story?.bodyType?.defName;
+            if (!pawnBuild.NullOrEmpty() && pawnBuild != bodyType)
+            {
+                GUI.color = new Color(0.85f, 0.6f, 0.35f);
+                Widgets.Label(new Rect(rect.x + 6f, rect.yMax - 48f, rect.width - 12f, 24f),
+                    $"Editing {bodyType}; preview is {pawnBuild}");
+                GUI.color = Color.white;
             }
 
             if (pendingApply)
@@ -306,8 +343,8 @@ namespace SizedApparelAutoRefit
             SARSettings s = SARMod.Settings;
             for (int i = 0; i < visible.Count; i++)
             {
-                if (value) SARPolicy.RestoreDefaults(visible[i], s);
-                else SARPolicy.SetStrengthAll(visible[i], s, 0f);
+                if (value) SARPolicy.RestoreDefaults(visible[i], s, bodyType);
+                else SARPolicy.SetStrengthAll(visible[i], s, bodyType, 0f);
             }
             dirty = true;
             pendingApply = true;

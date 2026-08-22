@@ -41,6 +41,15 @@ namespace SizedApparelAutoRefit
             return result;
         }
 
+        // Strength keys are "defName" or "defName|BodyType", so validate only the def half.
+        // Checking the whole key against DefDatabase silently discarded every per-build entry.
+        private static bool DefExists(string key)
+        {
+            int bar = key.IndexOf('|');
+            string defName = bar < 0 ? key : key.Substring(0, bar);
+            return DefDatabase<ThingDef>.GetNamedSilentFail(defName) != null;
+        }
+
         public static bool Export(string name, SARSettings s, out string error)
         {
             error = null;
@@ -95,15 +104,15 @@ namespace SizedApparelAutoRefit
                 {
                     foreach (XElement li in strengths.Elements("li"))
                     {
-                        string defName = (string)li.Attribute("def");
-                        if (defName.NullOrEmpty()) continue;
+                        string key = (string)li.Attribute("def");
+                        if (key.NullOrEmpty()) continue;
 
                         // Silently drop defs this install does not have, so profiles survive
                         // being shared between different mod lists.
-                        if (DefDatabase<ThingDef>.GetNamedSilentFail(defName) == null) { skipped++; continue; }
+                        if (!DefExists(key)) { skipped++; continue; }
                         if (float.TryParse((string)li.Attribute("value"), out float v))
                         {
-                            s.strengths[defName] = UnityEngine.Mathf.Clamp01(v);
+                            s.strengths[key] = UnityEngine.Mathf.Clamp(v, 0f, SARPolicy.MaxStrength);
                             applied++;
                         }
                     }
@@ -114,11 +123,11 @@ namespace SizedApparelAutoRefit
                 {
                     foreach (XElement li in sideStrengths.Elements("li"))
                     {
-                        string defName = (string)li.Attribute("def");
-                        if (defName.NullOrEmpty()) continue;
-                        if (DefDatabase<ThingDef>.GetNamedSilentFail(defName) == null) continue;
+                        string key = (string)li.Attribute("def");
+                        if (key.NullOrEmpty()) continue;
+                        if (!DefExists(key)) continue;
                         if (float.TryParse((string)li.Attribute("value"), out float v))
-                            s.strengthsSide[defName] = UnityEngine.Mathf.Clamp01(v);
+                            s.strengthsSide[key] = UnityEngine.Mathf.Clamp(v, 0f, SARPolicy.MaxStrength);
                     }
                 }
 

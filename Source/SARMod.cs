@@ -23,8 +23,12 @@ namespace SizedApparelAutoRefit
         // the config stays small and newly installed apparel picks up sane defaults on its own.
         public Dictionary<string, float> strengths = new Dictionary<string, float>();      // front and back
         public Dictionary<string, float> strengthsSide = new Dictionary<string, float>();  // east and west
+
         public HashSet<string> breastsOn = new HashSet<string>();
         public HashSet<string> breastsOff = new HashSet<string>();
+
+        // Bumped when the maths changes in a way that invalidates saved magnitudes.
+        public int calibrationVersion;
 
         public bool logGeneration;
 
@@ -63,9 +67,44 @@ namespace SizedApparelAutoRefit
             }
             ScribeSet(ref breastsOn, "breastsOn");
             ScribeSet(ref breastsOff, "breastsOff");
+            Scribe_Values.Look(ref calibrationVersion, "calibrationVersion", 0);
             Scribe_Values.Look(ref logGeneration, "logGeneration", false);
             Scribe_Collections.Look(ref disabledBodyTypes, "disabledBodyTypes", LookMode.Value);
             if (disabledBodyTypes == null) disabledBodyTypes = new List<string>();
+
+            if (Scribe.mode == LoadSaveMode.LoadingVars) MigrateCalibration();
+        }
+
+        // Strength used to be a raw multiplier whose "correct" value differed per build, so saved
+        // values encode corrections that the calibration table now applies itself. Left alone they
+        // would compound. Values of zero are kept, because those mean "this garment is switched
+        // off" rather than a magnitude.
+        private const int CurrentCalibrationVersion = 1;
+
+        private void MigrateCalibration()
+        {
+            if (calibrationVersion >= CurrentCalibrationVersion) return;
+
+            int reset = Strip(strengths) + Strip(strengthsSide);
+            calibrationVersion = CurrentCalibrationVersion;
+
+            if (reset > 0)
+            {
+                Log.Message($"[SA Auto-Refit] Reset {reset} saved refit strengths to the new calibrated "
+                            + "default of 1.0. Garments switched off stayed off.");
+            }
+        }
+
+        private static int Strip(Dictionary<string, float> store)
+        {
+            if (store == null) return 0;
+            List<string> drop = new List<string>();
+            foreach (KeyValuePair<string, float> kv in store)
+            {
+                if (kv.Value > 0.001f) drop.Add(kv.Key);
+            }
+            for (int i = 0; i < drop.Count; i++) store.Remove(drop[i]);
+            return drop.Count;
         }
 
         private static void ScribeSet(ref HashSet<string> set, string label)

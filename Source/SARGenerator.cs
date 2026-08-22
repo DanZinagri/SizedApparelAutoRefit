@@ -48,6 +48,23 @@ namespace SizedApparelAutoRefit
         // their distance, which reads as splayed spikes rather than a fitted garment.
         private const float FalloffFactor = 2f;
 
+        // Clear the breast by a hair rather than landing exactly on its edge, so the outline does
+        // not shimmer along the boundary.
+        private const float CoverMargin = 0.004f;
+
+        // Ceiling on displacement relative to the garment's own half-width, for monotonicity of
+        // the edge-weighted map.
+        private const float MaxPushRatio = 1.9f;
+
+        // Smooth approach to a ceiling: about 98% of the requested value at half the limit,
+        // tapering to the limit itself rather than stopping dead at it.
+        private static float SoftLimit(float value, float limit)
+        {
+            if (limit <= 1e-5f || value <= 0f) return 0f;
+            float r = value / limit;
+            return value / Mathf.Pow(1f + r * r * r * r, 0.25f);
+        }
+
         // Fades a push out below the deadzone instead of snapping it to zero. A hard cutoff puts
         // a step in the outline exactly where the displacement crosses the threshold.
         private static float Deadzone(float push)
@@ -186,7 +203,7 @@ namespace SizedApparelAutoRefit
 
             ThingDef def = SARRegistry.DefFor(key.wornPath);
             string how = "no def";
-            float fit = def == null ? 0f : ResolveFit(def, rot, out how);
+            float fit = def == null ? 0f : ResolveFit(def, rot, key.bodyType, out how);
 
             LogVerdict(key, rot, how, fit);
 
@@ -260,13 +277,14 @@ namespace SizedApparelAutoRefit
         // Whether this garment is reshaped, and how strongly. The decision is the user's, taken
         // from the per-item list; the global slider only scales the result.
         // East (and the west it mirrors) is the side profile; south and north are front and back.
-        private static float ResolveFit(ThingDef def, string rot, out string how)
+        private static float ResolveFit(ThingDef def, string rot, string bodyType, out string how)
         {
             SARSettings s = SARMod.Settings;
             SARPolicy.Facing facing = rot == "east" ? SARPolicy.Facing.Side : SARPolicy.Facing.Front;
 
-            float strength = SARPolicy.Strength(def, s, facing);
-            how = $"{(facing == SARPolicy.Facing.Side ? "side" : "front")} strength {strength:0.00}";
+            float strength = SARPolicy.Strength(def, s, facing, bodyType);
+            how = $"{bodyType} {(facing == SARPolicy.Facing.Side ? "side" : "front")} strength {strength:0.00}"
+                  + $" x{SARCalibration.For(bodyType, facing):0.00} calib";
             return strength;
         }
 
@@ -315,6 +333,13 @@ namespace SizedApparelAutoRefit
 
             float feather = s?.FeatherV ?? 0.06f;
             float gain = s?.bulgeGain ?? 1f;
+            // Side views show one breast, so only the front of the pawn should move.
+            bool sideView = rot == "east" || rot == "west";
+            bool pushRightOnly = sideView && sil.frontIsRight;
+            bool pushLeftOnly = sideView && !sil.frontIsRight;
+
+            float calib = SARCalibration.For(key.bodyType,
+                rot == "east" || rot == "west" ? SARPolicy.Facing.Side : SARPolicy.Facing.Front);
 
             float maxPush = 0f;
             int warpedRows = 0;
@@ -328,14 +353,37 @@ namespace SizedApparelAutoRefit
                 float bodyR = SARSilhouette.Lerp(sil.refRight, v), bodyL = SARSilhouette.Lerp(sil.refLeft, v);
                 float bustR = SARSilhouette.Lerp(sil.tgtRight, v), bustL = SARSilhouette.Lerp(sil.tgtLeft, v);
 
-                float scale = sil.BandWeight(v, feather) * gain * fit;
-                float pushR = SARSilhouette.Lerp(sil.pushRight, v) * scale;
-                float pushL = SARSilhouette.Lerp(sil.pushLeft, v) * scale;
+                float gl = SARSilhouette.Lerp(span.left, v), gr = SARSilhouette.Lerp(span.right, v);
+
+                // How far the breast sticks out past the garment's own edge — measured against
+                // the very edge the displacement is applied to, so the result is exactly the
+                // coverage the garment is missing. At strength 1 the garment just covers the
+                // breast; below that it under-covers, above it stands proud of it.
+                float breastR = SARSilhouette.Lerp(sil.breastRight, v);
+                float breastL = SARSilhouette.Lerp(sil.breastLeft, v);
+
+                // Calibration lands 1.0 on "correctly covered" for this build and facing; the
+                // slider then reads as a straightforward multiple of correct.
+                float scale = sil.BandWeight(v, feather) * gain * fit * calib;
+
+                // Two demands, whichever is greater. Bulge makes the cloth take the shape of the
+                // bust at any size; coverage guarantees it still clears the breast once the breast
+                // is big enough to escape the garment. Coverage alone leaves mid sizes flat, and
+                // bulge alone can leave a large bust poking out.
+                float bulgeR = SARSilhouette.Lerp(sil.bulgeRight, v);
+                float bulgeL = SARSilhouette.Lerp(sil.bulgeLeft, v);
+
+                float pushR = 0f, pushL = 0f;
+                if (pushLeftOnly) breastR = -1f;
+                if (pushRightOnly) breastL = -1f;
+
+                if (breastR >= 0f && gr >= 0f)
+                    pushR = Mathf.Max(Mathf.Max(0f, breastR + CoverMargin - gr), Mathf.Max(0f, bulgeR)) * scale;
+                if (breastL >= 0f && gl >= 0f)
+                    pushL = Mathf.Max(Mathf.Max(0f, gl - (breastL - CoverMargin)), Mathf.Max(0f, bulgeL)) * scale;
 
                 pushR = Deadzone(pushR);
                 pushL = Deadzone(pushL);
-
-                float gl = SARSilhouette.Lerp(span.left, v), gr = SARSilhouette.Lerp(span.right, v);
 
                 if ((pushR <= 0f && pushL <= 0f) || gl < 0f || gr < 0f || (gr - gl) <= 1e-4f)
                 {
@@ -351,6 +399,15 @@ namespace SizedApparelAutoRefit
                 float cx = (gl + gr) * 0.5f;
                 float rightRef = gr - cx;
                 float leftRef = cx - gl;
+                // Limit the displacement so the edge-weighted map stays monotonic — past roughly
+                // twice the garment's own half-width it would fold back and mirror a sliver of
+                // cloth. Soft-clipped rather than clamped: on a narrow side view the limit binds
+                // on some rows and not others, and a hard clamp would leave a visible kink right
+                // where it engages. This stays near-exact for ordinary demands and only bends as
+                // it approaches the limit.
+                pushR = SoftLimit(pushR, rightRef * MaxPushRatio);
+                pushL = SoftLimit(pushL, leftRef * MaxPushRatio);
+
                 float rightTgt = rightRef + pushR;
                 float leftTgt = leftRef + pushL;
 
@@ -368,7 +425,13 @@ namespace SizedApparelAutoRefit
                         float d = u - cx;
                         if (d <= rightTgt)
                         {
-                            uSrc = cx + d / rightTgt * rightRef;
+                            // Displace near the edge, not uniformly across the half. A uniform
+                            // scale drags the garment's interior — belts, buttons, plackets —
+                            // outward with the bust, and at large sizes smears them badly. This
+                            // leaves the centre where it is and puts the stretch where the cloth
+                            // is actually being pushed out.
+                            float t = rightTgt > 1e-5f ? d / rightTgt : 0f;
+                            uSrc = u - pushR * Mathf.SmoothStep(0f, 1f, t);
                         }
                         else
                         {
@@ -382,7 +445,8 @@ namespace SizedApparelAutoRefit
                         float d = cx - u;
                         if (d <= leftTgt)
                         {
-                            uSrc = cx - d / leftTgt * leftRef;
+                            float t = leftTgt > 1e-5f ? d / leftTgt : 0f;
+                            uSrc = u + pushL * Mathf.SmoothStep(0f, 1f, t);
                         }
                         else
                         {

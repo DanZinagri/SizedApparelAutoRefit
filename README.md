@@ -13,16 +13,20 @@ This resizing is still a bit rough but i feel like its "alright" enough to start
 Per-scanline, horizontal only. Left and right are handled **independently** — breasts push the
 outline forward only, so on side views the back edge stays put instead of smearing.
 
-**Displace the garment's own outline — not the body's.** Per row, the refit measures how far
-the breasts protrude past the *bare body* outline, then pushes the *garment's own* edge outward
-by that amount. The displacement comes purely from the body art, so it does not matter which
-body the garment was drawn against.
+**Measure against the edge being moved.** Per row, the refit measures how far the breast overlay
+sticks out past the *garment's own* edge, and pushes that edge out to cover it. The resulting
+outline is the union of garment and breast, which is round because the breast outline is round.
 
-This matters a lot. Remapping the body outline onto the garment (the first approach) silently
-assumed every garment was authored for Sized Apparel's body. Vanilla apparel is drawn for the
-vanilla body, whose torso is much wider than SA's narrow one — SA's Thin torso is only ~80px
-across at the bust while its breast art spans ~184px. That inflated the stretch past 2x and
-splayed loose clothing into spikes.
+Measuring against the *body* instead — an earlier approach — mixes baselines, because the result is
+applied to the garment. The body's own taper then drives the shape: on the Hulk build the widest
+part of the bulge landed about 46px below where the breast actually is widest, side views flared
+below the nipple and bent back in, and on Fat in side view the garment could not reach far enough
+to cover at any strength (0.135 available against 0.221 needed).
+
+**Stretch near the edge, not across the half.** Inside the outline the displacement is weighted
+toward the edge, so a belt or placket in the middle of the garment stays put instead of being
+dragged outward and smeared. It is soft-limited to 1.9x the garment's own half-width to keep the
+mapping from folding back on itself.
 
 **Local falloff, not a uniform scale.** Inside the outline the cloth stretches. *Outside* it,
 the outward push decays to zero over `FalloffFactor` times the push. A uniform scanline remap
@@ -34,32 +38,33 @@ controls, set from the apparel list (mod settings, or the **refit** button on th
 
 | control | what it does |
 |---|---|
-| **Front / back strength** (0-1) | reshaping applied to the south and north textures |
-| **Side strength** (0-1) | reshaping applied to the east texture (west mirrors it) |
+| **Front / back strength** (0-2) | reshaping applied to the south and north textures |
+| **Side strength** (0-2) | reshaping applied to the east texture (west mirrors it) |
 | **Off** | one-click shortcut setting both facings to 0; unticking restores the defaults |
 
 Front and side are separate sliders because the bust protrudes much further in profile than it
 does head-on. A value that looks right from the front is usually far too weak from the side, so
 one number cannot serve both.
 
-Defaults differ accordingly: **front/back 0.45, side 0.85**. Head-on the bust barely widens the
-outline and a strong push reads as pointed; in profile it protrudes properly and needs most of
-the available push. Unticking **Off** restores each facing to its own default rather than a
-single shared value.
-| **Draw breasts** | registers a sized variant, which is what keeps body parts rendering under the garment |
+Both default to **1.0 on every build**. Strength is measured against the garment's own edge, then
+corrected per build by a calibration table, so 1.0 means "correctly covered" rather than an
+arbitrary amount of push. The table was measured in game as the minimum value that just covers:
 
-They are separate because the two real cases pull opposite ways: heavy armour that breasts poke
-out from behind needs reshaping, while a small harness needs none but should still let the
-exposed chest draw.
+| build | front / back | side |
+|---|---|---|
+| Female | 0.55 | 1.10 |
+| Thin | 1.00 | 1.00 |
+| Hulk | 0.75 | 1.05 |
+| Fat | 1.00 | 1.15 |
 
-Turning **Draw breasts** off hands the garment back to Sized Apparel, and SA's check is
-pawn-wide — body parts then disappear on the whole pawn wearing it. That is SA's behaviour, not
-something this mod can scope to one item.
+Builds not in the table — modded ones — use 1.0 and behave as before. Saved strengths from before
+the table are reset once on load, since they encode the same corrections and would otherwise
+compound; garments switched off stay off.
 
 ### Entry points
 
 - **Mod settings -> Configure apparel** — the full list of every patched garment.
-- **Toggle-row button** (bottom right) — opens the *selected colonist's* clothing only, with a
+- **Refit button on the main button bar** — opens the *selected colonist's* clothing only, with a
   live portrait beside it. Select a colonist first.
 
 The per-colonist view renders the real pawn through PortraitsCache and refreshes as values

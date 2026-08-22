@@ -32,11 +32,16 @@ namespace SizedApparelAutoRefit
     // is the authority instead.
     public static class SARPolicy
     {
-        // The two facings want quite different amounts. Head-on, the bust barely widens the
-        // outline and a strong push reads as pointed, so front and back sit low. In profile the
-        // bust protrudes properly and needs most of the available push.
-        public const float DefaultStrengthFront = 0.45f;
-        public const float DefaultStrengthSide = 0.85f;
+        // The slider still reaches past 1.0 so a build can be pushed beyond correct coverage if
+        // wanted, but 1.0 is the calibrated target rather than an arbitrary amount.
+        public const float MaxStrength = 2f;
+
+        // Both 1.0. Strength is measured against the garment's own edge and then corrected per
+        // build by SARCalibration, so 1.0 means "correctly covered" on every build and facing.
+        // The old split values compensated for a displacement that was wrong by a different
+        // amount in each view; that is handled properly now.
+        public const float DefaultStrengthFront = 1f;
+        public const float DefaultStrengthSide = 1f;
 
         public static float DefaultFor(Facing facing)
         {
@@ -67,7 +72,7 @@ namespace SizedApparelAutoRefit
             SARFitExtension ext = def.GetModExtension<SARFitExtension>();
             if (ext != null)
             {
-                strength = Mathf.Clamp01(facing == Facing.Side ? ext.strengthSide : ext.strength);
+                strength = Mathf.Clamp(facing == Facing.Side ? ext.strengthSide : ext.strength, 0f, MaxStrength);
                 keepBreasts = ext.keepBreasts;
                 return;
             }
@@ -80,12 +85,27 @@ namespace SizedApparelAutoRefit
         }
 
         // How strongly this garment follows the bust, 0 to 1.
-        public static float Strength(ThingDef def, SARSettings s, Facing facing)
+        // Settings are per body type: the bust sits in a different place and protrudes by a
+        // different amount on each build. Measured on Sized Apparel's own art, the Hulk bust peaks
+        // around v=0.29 with a push of 0.045 while Female peaks at v=0.44 with 0.076, so a value
+        // tuned on one build is simply wrong on another.
+        public static string Key(ThingDef def, string bodyType)
+        {
+            return def.defName + "|" + bodyType;
+        }
+
+        public static float Strength(ThingDef def, SARSettings s, Facing facing, string bodyType)
         {
             if (def == null || s == null) return 0f;
 
             Dictionary<string, float> store = Store(s, facing);
-            if (store.TryGetValue(def.defName, out float user)) return Mathf.Clamp01(user);
+
+            if (!bodyType.NullOrEmpty() && store.TryGetValue(Key(def, bodyType), out float perBody))
+                return Mathf.Clamp(perBody, 0f, MaxStrength);
+
+            // Settings saved before body types were separated are keyed by defName alone. They
+            // still apply to every build until that build is given its own value.
+            if (store.TryGetValue(def.defName, out float legacy)) return Mathf.Clamp(legacy, 0f, MaxStrength);
 
             Defaults(def, facing, out float d, out _);
             return d;
@@ -105,29 +125,50 @@ namespace SizedApparelAutoRefit
             return keep;
         }
 
-        public static void SetStrength(ThingDef def, SARSettings s, Facing facing, float value)
+        public static void SetStrength(ThingDef def, SARSettings s, Facing facing, string bodyType, float value)
         {
             Defaults(def, facing, out float d, out _);
-            value = Mathf.Clamp01(value);
+            value = Mathf.Clamp(value, 0f, MaxStrength);
 
             Dictionary<string, float> store = Store(s, facing);
-            if (Mathf.Abs(value - d) < 0.001f) store.Remove(def.defName);
-            else store[def.defName] = value;
+            string key = Key(def, bodyType);
+
+            // Writing a per-build value retires the legacy shared entry for this garment, so the
+            // build being edited is no longer shadowed by it.
+            bool hadLegacy = store.ContainsKey(def.defName);
+
+            if (Mathf.Abs(value - d) < 0.001f && !hadLegacy) store.Remove(key);
+            else store[key] = value;
+
+            if (hadLegacy)
+            {
+                float shared = store[def.defName];
+                store.Remove(def.defName);
+
+                // Preserve the old shared value on every other build, so separating one build
+                // does not silently reset the rest.
+                foreach (BodyTypeDef other in SARBodyTypes.Eligible())
+                {
+                    if (other.defName == bodyType) continue;
+                    string otherKey = Key(def, other.defName);
+                    if (!store.ContainsKey(otherKey)) store[otherKey] = shared;
+                }
+            }
         }
 
         // Both facings at once, for switching a garment off.
-        public static void SetStrengthAll(ThingDef def, SARSettings s, float value)
+        public static void SetStrengthAll(ThingDef def, SARSettings s, string bodyType, float value)
         {
-            SetStrength(def, s, Facing.Front, value);
-            SetStrength(def, s, Facing.Side, value);
+            SetStrength(def, s, Facing.Front, bodyType, value);
+            SetStrength(def, s, Facing.Side, bodyType, value);
         }
 
         // Restores each facing to its own default. Not the same as setting one value on both,
         // because front and side differ.
-        public static void RestoreDefaults(ThingDef def, SARSettings s)
+        public static void RestoreDefaults(ThingDef def, SARSettings s, string bodyType)
         {
-            SetStrength(def, s, Facing.Front, DefaultStrengthFront);
-            SetStrength(def, s, Facing.Side, DefaultStrengthSide);
+            SetStrength(def, s, Facing.Front, bodyType, DefaultStrengthFront);
+            SetStrength(def, s, Facing.Side, bodyType, DefaultStrengthSide);
         }
 
         public static void SetKeepBreasts(ThingDef def, SARSettings s, bool value)
