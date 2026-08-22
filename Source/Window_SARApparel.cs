@@ -186,7 +186,8 @@ namespace SizedApparelAutoRefit
                 Widgets.Checkbox(rOff.position, ref newOff);
                 if (newOff != isOff)
                 {
-                    SARPolicy.SetStrengthAll(def, s, newOff ? 0f : SARPolicy.DefaultStrength);
+                    if (newOff) SARPolicy.SetStrengthAll(def, s, 0f);
+                    else SARPolicy.RestoreDefaults(def, s);
                     dirty = true;
                     pendingApply = true;
                 }
@@ -304,7 +305,10 @@ namespace SizedApparelAutoRefit
         {
             SARSettings s = SARMod.Settings;
             for (int i = 0; i < visible.Count; i++)
-                SARPolicy.SetStrengthAll(visible[i], s, value ? SARPolicy.DefaultStrength : 0f);
+            {
+                if (value) SARPolicy.RestoreDefaults(visible[i], s);
+                else SARPolicy.SetStrengthAll(visible[i], s, 0f);
+            }
             dirty = true;
             pendingApply = true;
         }

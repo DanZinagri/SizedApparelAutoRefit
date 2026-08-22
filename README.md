@@ -40,7 +40,12 @@ controls, set from the apparel list (mod settings, or the **refit** button on th
 
 Front and side are separate sliders because the bust protrudes much further in profile than it
 does head-on. A value that looks right from the front is usually far too weak from the side, so
-one number cannot serve both. Both default to 0.85, since 1.0 overshoots and reads pointed.
+one number cannot serve both.
+
+Defaults differ accordingly: **front/back 0.45, side 0.85**. Head-on the bust barely widens the
+outline and a strong push reads as pointed; in profile it protrudes properly and needs most of
+the available push. Unticking **Off** restores each facing to its own default rather than a
+single shared value.
 | **Draw breasts** | registers a sized variant, which is what keeps body parts rendering under the garment |
 
 They are separate because the two real cases pull opposite ways: heavy armour that breasts poke

@@ -13,8 +13,8 @@ namespace SizedApparelAutoRefit
     // </li>
     public class SARFitExtension : DefModExtension
     {
-        public float strength = SARPolicy.DefaultStrength;      // front and back
-        public float strengthSide = SARPolicy.DefaultStrength;  // east and west
+        public float strength = SARPolicy.DefaultStrengthFront;      // front and back
+        public float strengthSide = SARPolicy.DefaultStrengthSide;   // east and west
         public bool keepBreasts = true;
     }
 
@@ -32,9 +32,16 @@ namespace SizedApparelAutoRefit
     // is the authority instead.
     public static class SARPolicy
     {
-        // Full strength overshoots: the bust reads as too pointed. 0.85 tracks the drawn
-        // silhouette more closely in practice.
-        public const float DefaultStrength = 0.85f;
+        // The two facings want quite different amounts. Head-on, the bust barely widens the
+        // outline and a strong push reads as pointed, so front and back sit low. In profile the
+        // bust protrudes properly and needs most of the available push.
+        public const float DefaultStrengthFront = 0.45f;
+        public const float DefaultStrengthSide = 0.85f;
+
+        public static float DefaultFor(Facing facing)
+        {
+            return facing == Facing.Side ? DefaultStrengthSide : DefaultStrengthFront;
+        }
 
         public const string TagNoRefit = "SAR_NoRefit";
         public const string TagForceRefit = "SAR_ForceRefit";
@@ -53,7 +60,7 @@ namespace SizedApparelAutoRefit
 
         public static void Defaults(ThingDef def, Facing facing, out float strength, out bool keepBreasts)
         {
-            strength = DefaultStrength;
+            strength = DefaultFor(facing);
             keepBreasts = true;
             if (def?.apparel == null) return;
 
@@ -108,11 +115,19 @@ namespace SizedApparelAutoRefit
             else store[def.defName] = value;
         }
 
-        // Both facings at once, for the Off checkbox and the bulk buttons.
+        // Both facings at once, for switching a garment off.
         public static void SetStrengthAll(ThingDef def, SARSettings s, float value)
         {
             SetStrength(def, s, Facing.Front, value);
             SetStrength(def, s, Facing.Side, value);
+        }
+
+        // Restores each facing to its own default. Not the same as setting one value on both,
+        // because front and side differ.
+        public static void RestoreDefaults(ThingDef def, SARSettings s)
+        {
+            SetStrength(def, s, Facing.Front, DefaultStrengthFront);
+            SetStrength(def, s, Facing.Side, DefaultStrengthSide);
         }
 
         public static void SetKeepBreasts(ThingDef def, SARSettings s, bool value)
