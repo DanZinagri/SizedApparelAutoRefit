@@ -6,7 +6,7 @@
     <label>refit</label>
     <description>Adjust how clothing is reshaped to fit the chest, and whether body parts draw underneath each garment. Opens on the selected colonist's worn apparel when one is selected.</description>
     <workerClass>SizedApparelAutoRefit.MainButtonWorker_SARApparel</workerClass>
-    <iconPath>UI/Buttons/MainButtons/SizedApparelResizer</iconPath>
+    <iconPath>UI/Buttons/MainButtons/SARButton</iconPath>
     <minimized>True</minimized>
     <order>95</order>
   </MainButtonDef>
