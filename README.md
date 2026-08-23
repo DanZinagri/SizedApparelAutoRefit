@@ -31,3 +31,11 @@ Def write and otherwise cached images. I'm not re-morphing things on the frame/t
 This basically hands off everything to SA0 to handle in regards to draw/display once we just make the morphs.
 
 From a behind-the scenes perspective SA0 has one piece of clothing for each "severity" level of the breasts headiff and ties that to a bodypart + clothing size. This just generates one for each tier and leaves it be.
+
+
+## AI Note
+
+AI was used for the GUI aspects, while i did alot of the code (i hate GUI code and it always looks like shit when i do it). Even of what it did generate I went over it like i was reading an Intern's code looking for mistakes before
+testing the heck out of it and running it through the dubs analyzer wringer for good measure.
+This was a learning experience as while i have done caching and generating of images, stretch and morphing textures was a bit of a new one for me so I'm not gonna claim that portion is gonna look great, but I'll keep trying to refine 
+it if there's demand for it.
