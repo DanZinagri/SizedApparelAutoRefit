@@ -6,15 +6,7 @@
   <supportedVersions>
     <li>1.6</li>
   </supportedVersions>
-  <description>Automatically generates the sized apparel textures that Sized Apparel for RJW expects, for any garment that has no hand-drawn size variants.
-
-Sized Apparel only resizes clothing it ships art for. Anything else is left at its vanilla shape, and — because one unsupported chest garment flips a pawn-wide flag — a single unsupported shirt disables sizing for that colonist entirely and hides their breasts.
-
-This mod fills those gaps. It reads the actual silhouette Sized Apparel draws (its _BaseBody body art plus the breast overlay for each size stage), works out how the outline changes from size 0 to size N, and warps the vanilla worn texture to match. The result is registered under the exact path Sized Apparel probes for, so Sized Apparel consumes it with no changes on its side.
-
-Hand-drawn art always wins: a size variant is only generated where Sized Apparel has none.
-
-Generation is lazy — textures are built on first request and cached, so startup cost is a few milliseconds of string work rather than thousands of baked images.</description>
+  <description>Automatically generates the sized apparel textures that Sized Apparel for RJW expects, for any garment that has no hand-drawn size variants..</description>
   <modDependencies>
     <li>
       <packageId>brrainz.harmony</packageId>
