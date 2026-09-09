@@ -109,7 +109,14 @@ namespace SizedApparelAutoRefit
             if (s == null || !s.enabled) return;
 
             List<BodyTypeDef> bodyTypes = SARBodyTypes.Eligible();
-            if (bodyTypes.Count == 0) return;
+            if (bodyTypes.Count == 0)
+            {
+                Log.Warning("[SA Auto-Refit] No body build has both body art and breast art visible, so nothing "
+                            + "was registered and the apparel list will be empty. Sized Apparel's breast art lives "
+                            + "under SizedApparel/BodyParts/Human/Breasts; if that folder is missing or replaced, "
+                            + "check the mod that changed it.");
+                return;
+            }
 
             bool registerMale = SABridge.UseGenderSpecificTexture;
 

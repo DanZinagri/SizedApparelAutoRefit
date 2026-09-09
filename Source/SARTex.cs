@@ -40,15 +40,30 @@ namespace SizedApparelAutoRefit
             return readable;
         }
 
-        public static Texture2D LoadReadable(string path)
+        // ContentFinder first; on a miss, let Sized Apparel materialise a lazily loaded texture
+        // and look again. Only SA's own folders are ever lazy, so the fallback costs nothing for
+        // vanilla or third-party art. Confirmed against a report of an empty apparel list that
+        // reproduced only with SA's lazy loading on.
+        private static Texture2D Find(string path)
         {
             Texture2D raw = ContentFinder<Texture2D>.Get(path, false);
+            if (raw != null) return raw;
+            if (path != null && path.Contains("SizedApparel") && SABridge.TextureExists(path))
+            {
+                raw = ContentFinder<Texture2D>.Get(path, false);
+            }
+            return raw;
+        }
+
+        public static Texture2D LoadReadable(string path)
+        {
+            Texture2D raw = Find(path);
             return raw == null ? null : Readable(raw);
         }
 
         public static bool Exists(string path)
         {
-            return ContentFinder<Texture2D>.Get(path, false) != null;
+            return Find(path) != null;
         }
 
         // Bilinear sample in UV space. Returns fully transparent outside [0,1] rather than

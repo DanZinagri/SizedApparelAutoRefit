@@ -19,6 +19,7 @@ namespace SizedApparelAutoRefit
         private static FieldInfo useGenderSpecificField;
         private static FieldInfo useBodyTextureField;
         private static MethodInfo clearAllMethod;
+        private static MethodInfo textureExistsMethod;
 
         public static bool Active
         {
@@ -58,6 +59,8 @@ namespace SizedApparelAutoRefit
                     useGenderSpecificField = AccessTools.Field(settings, "useGenderSpecificTexture");
                     useBodyTextureField = AccessTools.Field(settings, "useBodyTexture");
                 }
+
+                textureExistsMethod = AccessTools.Method(util, "TextureExists", new[] { typeof(string) });
 
                 Type db = AccessTools.TypeByName("SizedApparel.SizedApparelsDatabase");
                 if (db != null) clearAllMethod = AccessTools.Method(db, "ClearAll");
@@ -126,6 +129,24 @@ namespace SizedApparelAutoRefit
         // hard: on a miss it writes a "failed" result for all 11 size indices of that key.
         // If anything probed a path before we registered it, that key stays poisoned for
         // the session unless we clear it.
+        // Sized Apparel's own existence check. Unlike ContentFinder this understands SA's lazy
+        // texture loading: with that setting on — and it is on by default — every path under a
+        // "SizedApparel" folder is stripped from the content lists at load and only materialised
+        // when SA itself asks for it. Asking ContentFinder directly for SA's breast or body-part
+        // art then returns null, which made this mod conclude no build had any breast art and
+        // register nothing: the apparel window showed "0 garments" on every pawn. Calling this
+        // loads the texture as a side effect, after which ContentFinder can see it.
+        public static bool TextureExists(string path)
+        {
+            if (!Active || textureExistsMethod == null || path.NullOrEmpty()) return false;
+            try { return (bool)textureExistsMethod.Invoke(null, new object[] { path }); }
+            catch (Exception ex)
+            {
+                Log.WarningOnce("[SA Auto-Refit] SizedApparelUtility.TextureExists threw: " + ex.Message, 2048029917);
+                return false;
+            }
+        }
+
         public static void ClearResolvedPathCaches()
         {
             if (!Active || clearAllMethod == null) return;
