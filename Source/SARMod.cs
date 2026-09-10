@@ -119,7 +119,6 @@ namespace SizedApparelAutoRefit
     {
         public static SARSettings Settings;
 
-        private Vector2 scroll;
 
         public SARMod(ModContentPack content) : base(content)
         {
@@ -129,10 +128,40 @@ namespace SizedApparelAutoRefit
 
         public override string SettingsCategory() => "Sized Apparel Auto-Refit";
 
+        private enum Tab { General, BodyTypes }
+
+        private Tab tab = Tab.General;
+        private Vector2 scrollGeneral;
+        private Vector2 scrollBodies;
+
+        // Content height measured on the previous frame, so the scroll view fits what it
+        // actually holds instead of a fixed guess that overflows.
+        private float generalHeight = 600f;
+
+        // Which builds actually have Sized Apparel breast art. Probing textures is not free, so
+        // it is computed once when the tab is first shown.
+        private HashSet<string> eligibleBodyTypes;
+
         public override void DoSettingsWindowContents(Rect inRect)
         {
-            Rect view = new Rect(0f, 0f, inRect.width - 20f, 560f);
-            Widgets.BeginScrollView(inRect, ref scroll, view);
+            // TabDrawer draws the tab strip above the rect it is given, so leave room for it.
+            Rect body = new Rect(inRect.x, inRect.y + 32f, inRect.width, inRect.height - 32f);
+
+            List<TabRecord> tabs = new List<TabRecord>
+            {
+                new TabRecord("General", delegate { tab = Tab.General; }, tab == Tab.General),
+                new TabRecord("Body types", delegate { tab = Tab.BodyTypes; }, tab == Tab.BodyTypes),
+            };
+            TabDrawer.DrawTabs(body, tabs);
+
+            if (tab == Tab.General) DrawGeneral(body);
+            else DrawBodyTypes(body);
+        }
+
+        private void DrawGeneral(Rect rect)
+        {
+            Rect view = new Rect(0f, 0f, rect.width - 20f, generalHeight);
+            Widgets.BeginScrollView(rect, ref scrollGeneral, view);
 
             Listing_Standard list = new Listing_Standard();
             list.Begin(view);
@@ -178,19 +207,6 @@ namespace SizedApparelAutoRefit
             GUI.color = Color.white;
 
             list.GapLine(12f);
-            list.Label("Body types");
-            foreach (BodyTypeDef bt in DefDatabase<BodyTypeDef>.AllDefsListForReading)
-            {
-                if (bt?.defName == null) continue;
-                if (bt == BodyTypeDefOf.Baby || bt == BodyTypeDefOf.Child) continue;
-
-                bool on = Settings.BodyTypeEnabled(bt.defName);
-                bool was = on;
-                list.CheckboxLabeled("    " + bt.defName, ref on);
-                if (on != was) Settings.SetBodyTypeEnabled(bt.defName, on);
-            }
-
-            list.GapLine(12f);
             list.Label($"Registered variants: {SARRegistry.RegisteredCount} across {SARRegistry.ApparelCount} apparel defs");
             list.Label($"Generated this session: {SARGenerator.GeneratedCount}");
 
@@ -208,6 +224,59 @@ namespace SizedApparelAutoRefit
                        + "Changes to the enabled toggle or body types need a restart, and memory from discarded "
                        + "textures is only reclaimed on restart.");
             GUI.color = Color.white;
+
+            generalHeight = list.CurHeight + 16f;
+            list.End();
+            Widgets.EndScrollView();
+        }
+
+        private void DrawBodyTypes(Rect rect)
+        {
+            if (eligibleBodyTypes == null)
+            {
+                eligibleBodyTypes = new HashSet<string>();
+                foreach (BodyTypeDef bt in SARBodyTypes.Eligible()) eligibleBodyTypes.Add(bt.defName);
+            }
+
+            List<BodyTypeDef> all = new List<BodyTypeDef>();
+            foreach (BodyTypeDef bt in DefDatabase<BodyTypeDef>.AllDefsListForReading)
+            {
+                if (bt?.defName == null) continue;
+                if (bt == BodyTypeDefOf.Baby || bt == BodyTypeDefOf.Child) continue;
+                all.Add(bt);
+            }
+            all.Sort((x, y) => string.Compare(x.defName, y.defName, System.StringComparison.OrdinalIgnoreCase));
+
+            float rowH = Text.LineHeight + 6f;
+            float headerH = 70f;
+            Rect view = new Rect(0f, 0f, rect.width - 20f, headerH + all.Count * rowH + 16f);
+            Widgets.BeginScrollView(rect, ref scrollBodies, view);
+
+            Listing_Standard list = new Listing_Standard();
+            list.Begin(view);
+
+            list.Label($"{all.Count} body types. Untick a build to leave its apparel alone. Changes need a restart.");
+            GUI.color = new Color(0.6f, 0.6f, 0.6f);
+            list.Label("Builds without Sized Apparel breast art have no bust outline to refit to and are greyed out; "
+                       + "ticking them does nothing until art exists for them.");
+            GUI.color = Color.white;
+            list.GapLine(6f);
+
+            for (int i = 0; i < all.Count; i++)
+            {
+                BodyTypeDef bt = all[i];
+                bool eligible = eligibleBodyTypes.Contains(bt.defName);
+
+                bool on = Settings.BodyTypeEnabled(bt.defName);
+                bool was = on;
+
+                if (!eligible) GUI.color = new Color(0.55f, 0.55f, 0.55f);
+                list.CheckboxLabeled(bt.defName + (eligible ? "" : "   (no breast art)"), ref on,
+                    eligible ? null : "Sized Apparel ships no breast art for this build, so there is no bust outline to refit to.");
+                GUI.color = Color.white;
+
+                if (on != was) Settings.SetBodyTypeEnabled(bt.defName, on);
+            }
 
             list.End();
             Widgets.EndScrollView();
