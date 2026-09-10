@@ -504,6 +504,10 @@ namespace SizedApparelAutoRefit
                 for (int i = 0; i < injectedPaths.Count; i++) holder.Remove(injectedPaths[i]);
             }
 
+            // A memoising ContentFinder wrapper would otherwise keep serving the texture we just
+            // withdrew, and the regenerated one under the same path would never be seen.
+            SARTexCacheCompat.Forget(injectedPaths);
+
             injectedPaths.Clear();
             ownedCount = 0;
             ensured.Clear();

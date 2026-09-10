@@ -46,13 +46,16 @@ namespace SizedApparelAutoRefit
         // reproduced only with SA's lazy loading on.
         private static Texture2D Find(string path)
         {
-            Texture2D raw = ContentFinder<Texture2D>.Get(path, false);
-            if (raw != null) return raw;
-            if (path != null && path.Contains("SizedApparel") && SABridge.TextureExists(path))
-            {
-                raw = ContentFinder<Texture2D>.Get(path, false);
-            }
-            return raw;
+            if (path == null) return null;
+
+            // Order matters. Sized Apparel lazy-loads its own art, and Jikulopo Texture Cache
+            // memoises ContentFinder misses permanently. Querying before SA has loaded would
+            // freeze a null for that path — for us and for SA's own graphics. So for SA's folders
+            // the load is requested first and ContentFinder consulted once, afterwards. That is
+            // also simply the right order: there is no reason to look before asking.
+            if (path.Contains("SizedApparel")) SABridge.TextureExists(path);
+
+            return ContentFinder<Texture2D>.Get(path, false);
         }
 
         public static Texture2D LoadReadable(string path)
