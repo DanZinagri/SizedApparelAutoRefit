@@ -21,7 +21,10 @@ namespace SizedApparelAutoRefit
             // mod's texture list, which at that point is empty and stays cached for the session.
             // SA would then treat every garment as unsupported. StaticConstructorOnStartup runs
             // after defs and content are loaded, so the same patching is safe.
-            new Harmony("DanZinagri.SizedApparelAutoRefit").PatchAll();
+            //
+            // The assembly is passed explicitly: on .NET 10 (1.7) the parameterless PatchAll() reads the calling
+            // assembly off the stack, which breaks when the JIT inlines the call (Harmony issue #395).
+            new Harmony("DanZinagri.SizedApparelAutoRefit").PatchAll(Assembly.GetExecutingAssembly());
 
             if (!SABridge.Active)
             {
